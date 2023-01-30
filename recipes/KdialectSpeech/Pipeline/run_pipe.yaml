@@ -1,0 +1,58 @@
+# - data_dir
+# - 매니패스트 파일
+# - 말뭉치 파일
+# - 토크나이저
+# - lm_model
+# - 초매개변수
+
+### 0. common
+# pipe_log
+log_config: log-config.yaml
+log_file: log.txt
+error_file_log: error_files.txt # wrong audio files
+wrong_samplerate_file: wrong_samplerate.txt # samplerate이 16000이 아닌 파일 목록
+
+# directory
+# base_dir: .. # asr의 base_dir과 중복되는 변수, 수정 검토 kdialect_base_dir
+# tokenizer_dir: !ref <base_dir>/Tokenizer
+# lm_dir: !ref <base_dir>/LM
+# asr_dir: !ref <base_dir>/ASR/Conformer
+
+kdialect_base_dir: ..
+tokenizer_dir: !ref <kdialect_base_dir>/Tokenizer
+lm_dir: !ref <kdialect_base_dir>/LM
+asr_dir: !ref <kdialect_base_dir>/ASR/Conformer
+
+# run modules
+run_modules:
+    - tokenizer
+    # - lm
+    - asr
+
+run_provinces:
+    # - gw
+    # - gs
+    # - jl
+    - jj
+    # - cc
+    # - total
+
+gpu_num: 4
+
+# 결과 모델 파일을 trained model dir로 복사 여부
+copy_trained_model: True
+pretrained_model_base: !ref <asr_dir>/Inference/pretrained-model-src
+
+smaplerate: 16000
+
+### 1. Tokenizer
+tokenizer_dict: # provice_code : token_output: 5000
+   gw: 5000
+   gs: 5000
+   jl: 5000
+   jj: 1000
+   cc: 5000
+
+### 2. LM(언어모델)
+
+### 3. ASR(음성인식)
