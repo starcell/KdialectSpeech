@@ -9,7 +9,15 @@ kdialectspeech 모델 학습은 [Speechbrain](https://speechbrain.github.io) Too
 
 ## Install
 kdialectspeech 데이터를 이용한 음성인식 모델링을 실행하기 위해서는 KdialectSpeech 저장소에서 소스를 다운로드 받아서 필요한 환경을 설치합니다.  
-먼저 Python 3.7+을 사용할 수 있는 환경을 준비 합니다.  
+먼저 Python 3.7+을 사용할 수 있는 환경을 준비 합니다.
+
+데이터 준비를 위하여 ffmpeg가 필요하므로 아래와 같이 명령을 실행하여 설치합니다.
+```
+apt update
+apt upgrade
+apt install ffmpeg
+```
+
 그리고 다음의 명령을 실행하여 스피치브레인을 설치합니다.
 ```
 git clone https://github.com/starcell/KdialectSpeech.git
@@ -26,18 +34,15 @@ import speechbrain as sb
 ```
 오류가 없이 임포트가 되면 스피치브레인이 정상적으로 설치된 것입니다.  
 
-데이터 준비를 위하여 ffmpeg가 필요하므로 아래와 같이 명령을 실행하여 설치합니다.
-```
-apt update
-apt install ffmpeg
-```
 
+<!--
 ## Test Installation
 다음과 같은 명령을 실행하여 설치된 내용들이 정상적으로 작동하는지 확인합니다.
 ```
 pytest tests
 pytest --doctest-modules speechbrain
 ```
+-->
 
 # Running an experiment
 이제 KdialectSpeech 모델링 학습을 실행합니다.

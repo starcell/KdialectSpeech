@@ -3,7 +3,7 @@
 **/ckpt/
 
 # csv file directory
-**/csv/
+# **/csv/
 
 #env corrupt files
 **/env_corrupt/
@@ -16,7 +16,7 @@
 
 *.wav
 
-*.csv
+# *.csv
 
 *.yaml
 
