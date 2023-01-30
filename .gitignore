@@ -18,7 +18,7 @@
 
 # *.csv
 
-*.yaml
+# *.yaml
 
 nohup.out
 
