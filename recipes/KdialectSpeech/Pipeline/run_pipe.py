@@ -19,9 +19,6 @@ from pathlib import Path
 import speechbrain as sb
 from hyperpyyaml import load_hyperpyyaml
 
-import boto3
-
-from kdialectspeech.s3_download import get_s3_files
 from kdialectspeech.resample import resample_audio
 
 # print(os.path.dirname(os.path.abspath(__file__)))
