@@ -21,9 +21,6 @@ from hyperpyyaml import load_hyperpyyaml
 
 from kdialectspeech.resample import resample_audio
 
-# print(os.path.dirname(os.path.abspath(__file__)))
-# print(__file__)
-
 if __name__ == "__main__":
     # CLI:
     hparams_file, run_opts, overrides = sb.parse_arguments(sys.argv[1:])
@@ -40,47 +37,6 @@ if __name__ == "__main__":
     # setup_logging(config_path="log-config.yaml", overrides={}, default_level=logging.INFO)
     sb.utils.logger.setup_logging(log_config, logger_overrides)
     #####
-
-
-    ##### download data from s3 storage
-    if 'data_download' in hparams['run_modules']:
-        logger.info(f'data_download starting.....')
-        # yaml에서 설정값 읽어오기 : 스토리지 접속 정보, 데이터 저장 위치
-        service_name = hparams["service_name"]
-        endpoint_url = hparams["endpoint_url"] 
-        # storage_region_name = hparams["storage_region_name"]
-        access_key = hparams["access_key"]
-        secret_key = hparams["secret_key"]
-
-        s3 = boto3.client(service_name, endpoint_url=endpoint_url, aws_access_key_id=access_key,
-                        aws_secret_access_key=secret_key)
-
-        bucket_name = hparams["bucket_name"]
-        key_names = hparams["key_names"]
-        max_keys = hparams["max_keys"]
-
-        data_save_path = hparams["data_save_path"]
-        error_file_log = hparams["error_file_log"]
-
-        # data_save_path = secret_key = hparams["data_save_path"]
-        os.makedirs(data_save_path, exist_ok=True)
-
-        # get_s3_files(s3, bucket_name, key_names, max_keys, data_save_path, error_file_log, root_folder='starcell/')
-        get_s3_files(s3, bucket_name, key_names, max_keys, data_save_path, error_file_log)
-        #####
-
-        ##### resample audio files
-        wrong_samplerate_file = hparams["wrong_samplerate_file"]
-        if os.path.isfile(wrong_samplerate_file):
-            logger.info(f'{wrong_samplerate_file}의 파일들을 변환 시작-----')
-            resample_audio(wrong_samplerate_file, smaplerate=16000)
-            logger.info(f'{wrong_samplerate_file}의 파일들을 변환 종료-----')
-        else:
-            logger.info(f'{wrong_samplerate_file}이 존재하지 않아 파일들을 변환 안함-----')
-
-    else:
-        logger.info(f'data_download is not in run_modules')
-    # #####
 
     #####
     ##### 방언별 실행 : 토크나이저, 언어모델, 음성인식모델

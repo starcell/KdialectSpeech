@@ -17,10 +17,10 @@ run_modules:
     - asr
 
 run_provinces: # 아래 지정된 지역 방언에 대하여 순차적으로 실행(gw:강원, gs:경상, jl:전라, jj:제주, cc:충청)
-    # - gw
+    - gw
     # - gs
     # - jl
-    - jj
+    # - jj
     # - cc
     # - total
 

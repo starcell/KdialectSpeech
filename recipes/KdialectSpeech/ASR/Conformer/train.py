@@ -43,15 +43,20 @@ from torch.utils.tensorboard import SummaryWriter # 중요, 맨
 ### 아래 모듈을 설치하라고 권고함.
 # !pip install -U torch-tb-profiler
 
-import os
+# import os
 import sys
-import numpy as np
+# import numpy as np
 import torch
 import logging
-from pathlib import Path
+# from pathlib import Path
 import speechbrain as sb
 from hyperpyyaml import load_hyperpyyaml
 from speechbrain.utils.distributed import run_on_main
+
+# from datetime import datetime
+
+sys.path.append('../../kdialectspeech')
+from swer import space_normalize_lists
 
 logger = logging.getLogger(__name__)
 
@@ -60,15 +65,8 @@ class ASR(sb.core.Brain):
     def compute_forward(self, batch, stage):
         """Forward computations from the waveform batches
         to the output probabilities."""
-        # print(f'compute_forward ----- 1')
-        # print(f'type of batch : {batch}')
         batch = batch.to(self.device)
-        # print(f'compute_forward ----- 2')
         wavs, wav_lens = batch.sig
-        # print(f'wavs, wav_lens : {wavs}, {wav_lens}')
-        # print(f'compute_forward ----- 3')
-        # print(f'wavs : {wavs}')
-        # print(f'wav_lens : {wav_lens}')
         tokens_bos, _ = batch.tokens_bos
 
         # Add augmentation if specified
@@ -91,8 +89,6 @@ class ASR(sb.core.Brain):
 
         # forward modules
         src = self.modules.CNN(feats)
-        # print(f'tokens_bos : {tokens_bos}')
-        # print(f'pad_idx : {self.hparams.pad_index}')
         enc_out, pred = self.modules.Transformer( # pred : decoder out
             src, tokens_bos, wav_lens, pad_idx=self.hparams.pad_index
         )
@@ -105,7 +101,6 @@ class ASR(sb.core.Brain):
         pred = self.modules.seq_lin(pred)
         p_seq = self.hparams.log_softmax(pred)
 
-        # print(f'enc_out size : {enc_out.size()}')
         # Compute outputs
         hyps = None
         if stage == sb.Stage.TRAIN:
@@ -114,41 +109,21 @@ class ASR(sb.core.Brain):
             hyps = None
             current_epoch = self.hparams.epoch_counter.current
             if current_epoch % self.hparams.valid_search_interval == 0:
-                # for the sake of efficiency, we only perform beamsearch with
-                # limited capacity and no LM to give user some idea of
-                # how the AM is doing
-                ####
-                #### 시간이 많이 걸리는 부분 : 아래 valid_search
-                ####
-                # print(f' valid enc_out size : {enc_out.size()}')
-                # print(f' valid wav_lens : {wav_lens}')
                 hyps, _ = self.hparams.valid_search(enc_out.detach(), wav_lens)
                 # print(f' valid hyps : {hyps}')
         elif stage == sb.Stage.TEST:
-            # print(f'compute_forward ----- 4')
-            # print(f' test enc_out size : {enc_out.size()}')
             hyps, _ = self.hparams.test_search(enc_out.detach(), wav_lens) # test_search와 valid_search의 차이는 LM 사용 여부
             # print(f' test hyps : {hyps}')
-            # print(f'compute_forward ----- 5')
-        # print(f'compute_forward ------------------------------------')
-        # print(f'compute_forward p_ctc ----- : {p_ctc}')
-        # print(f'compute_forward p_seq ----- : {p_seq}')
-        # print(f'compute_forward wav_lens ----- : {wav_lens}')
-        # print(f'compute_forward hyps ----- : {hyps}')
         return p_ctc, p_seq, wav_lens, hyps
 
     def compute_objectives(self, predictions, batch, stage):
         """Computes the loss (CTC+NLL) given predictions and targets."""
         
-        # print(f'compute_objectives ----- 1')
         (p_ctc, p_seq, wav_lens, hyps,) = predictions
 
         ids = batch.id
-        # print(f'compute_objectives ids : {ids}')
         tokens_eos, tokens_eos_lens = batch.tokens_eos
         tokens, tokens_lens = batch.tokens
-        
-        # logger.info(f'compute_objectives tokens.size ----- : {tokens.size()}') # npark
 
         if hasattr(self.modules, "env_corrupt") and stage == sb.Stage.TRAIN:
             tokens_eos = torch.cat([tokens_eos, tokens_eos], dim=0)
@@ -158,8 +133,6 @@ class ASR(sb.core.Brain):
             tokens = torch.cat([tokens, tokens], dim=0)
             tokens_lens = torch.cat([tokens_lens, tokens_lens], dim=0)
 
-        # print(f' compute_objectives tokens_eos : {tokens_eos}')
-        # print(f' compute_objectives p_seq : {p_seq}')
         loss_seq = self.hparams.seq_cost(
             p_seq, tokens_eos, length=tokens_eos_lens
         )
@@ -180,19 +153,27 @@ class ASR(sb.core.Brain):
                     tokenizer.decode_ids(utt_seq).split(" ") for utt_seq in hyps
                 ]
                 target_words = [wrd.split(" ") for wrd in batch.wrd]
-                predicted_swords = get_swords(target_words, hyps) # space normalized hyp words
+
+                print(f'----- target_words : {target_words}')
+                print(f'----- predicted_words : {predicted_words}')
+                swords_temp = []
+                for idx, target in enumerate(target_words):
+                    # predicted_swords = space_normalize_lists(target, predicted_words[idx])
+                    swords_temp.append(space_normalize_lists(target, predicted_words[idx]))
+                predicted_swords = swords_temp
+
+                print(f'ids : {ids}, predicted_swords : {predicted_swords}')
                 predicted_chars = [
                     list("".join(utt_seq)) for utt_seq in predicted_words
                 ]
                 target_chars = [list("".join(wrd.split())) for wrd in batch.wrd]
-                self.wer_metric.append(ids, predicted_words, target_words)
                 self.swer_metric.append(ids, predicted_swords, target_words)
+                self.wer_metric.append(ids, predicted_words, target_words)
                 self.cer_metric.append(ids, predicted_chars, target_chars)
 
             # compute the accuracy of the one-step-forward prediction
             self.acc_metric.append(p_seq, tokens_eos, tokens_eos_lens)
             
-        # logger.info(f'compute_objectives loss ----- : {loss}') # npark
         return loss
 
     def fit_batch(self, batch):
@@ -231,32 +212,18 @@ class ASR(sb.core.Brain):
 
     def evaluate_batch(self, batch, stage):
         """Computations needed for validation/test batches"""
-        # print(f'stage : {stage}')
-        # print(f'length of batch : {len(batch)}')
-        # print(f'batch.id type -------- : {type(batch.id)}')
-        # print(f'batch.id -------- : {batch.id}')
-        # print(f'batch sig type : {type(batch.sig)}')
-        # print(f'batch sig : {batch.sig[0]}')
-        # print(f'batch sig size : {batch.sig[0].size()}')
-        
-        # for k, v in batch.sig:
-        #     print(k)
-        #     print(v)
         
         with torch.no_grad():
-            # print('########## compute_forward #########')
             predictions = self.compute_forward(batch, stage=stage)
-            # print(f'########## compute_objectives ######### stage : {stage}')
             loss = self.compute_objectives(predictions, batch, stage=stage)
-            # print('########## eval end #########')
         return loss.detach()
 
     def on_stage_start(self, stage, epoch):
         """Gets called at the beginning of each epoch"""
         if stage != sb.Stage.TRAIN:
             self.acc_metric = self.hparams.acc_computer()
-            self.wer_metric = self.hparams.error_rate_computer()
             self.swer_metric = self.hparams.error_rate_computer()
+            self.wer_metric = self.hparams.error_rate_computer()
             self.cer_metric = self.hparams.error_rate_computer()
 
     def on_stage_end(self, stage, stage_loss, epoch):
@@ -273,8 +240,8 @@ class ASR(sb.core.Brain):
                 current_epoch % valid_search_interval == 0
                 or stage == sb.Stage.TEST
             ):
-                stage_stats["WER"] = self.wer_metric.summarize("error_rate")
                 stage_stats["sWER"] = self.swer_metric.summarize("error_rate")
+                stage_stats["WER"] = self.wer_metric.summarize("error_rate")
                 stage_stats["CER"] = self.cer_metric.summarize("error_rate")
 
         # log stats and save checkpoint at end-of-epoch
@@ -306,6 +273,7 @@ class ASR(sb.core.Brain):
                 stats_meta={"Epoch loaded": self.hparams.epoch_counter.current},
                 test_stats=stage_stats,
             )
+            # print(f'self.hparams.wer_file : {self.hparams.wer_file}')
             with open(self.hparams.wer_file, "w") as w:
                 self.swer_metric.write_stats(w)
                 self.wer_metric.write_stats(w)
@@ -459,82 +427,10 @@ def dataio_prepare(hparams):
     )
     return train_data, valid_data, test_data, tokenizer
 
-# 공백 정규화 비교
-def char_tokenizer(s):
-    result = []
-    flag = False
-    for c in s:
-        if c == ' ':
-            flag = True
-            continue
-        if flag == True:
-            c = '_' + c
-            flag = False
-        result.append(c)
-    return result
-
-def get_swords(ref , hyp):
-    refs = char_tokenizer(ref)
-    hyps = char_tokenizer(hyp)
-    ref_nospace = ref.replace(' ', '')
-    hyp_nospace = hyp.replace(' ', '')
-    rlen = len(refs)
-    hlen = len(hyps)
-    scores =  np.zeros((hlen+1, rlen+1), dtype=np.int32)
-
-    # initialize, 공란을 무시하고 음절의 거리 매트릭스 만들기
-    for r in range(rlen+1):
-        scores[0, r] = r
-    for h in range(1, hlen+1):
-        scores[h, 0] = scores[h-1, 0] + 1
-        for r in range(1, rlen+1):
-            sub_or_cor = scores[h-1, r-1] + (0 if ref_nospace[r-1] == hyp_nospace[h-1] else 1)
-            insert = scores[h-1, r] + 1
-            delete = scores[h, r-1] + 1
-            scores[h, r] = min(sub_or_cor, insert, delete)
-
-    # traceback and compute alignment
-    h, r = hlen, rlen
-    ref_norm, hyp_norm = [], []
-
-    while r > 0 or h > 0:
-        if h == 0:
-            last_r = r - 1
-        elif r == 0:
-            last_h = h - 1
-            last_r = r
-        else:
-            sub_or_cor = scores[h-1, r-1] + (0 if ref_nospace[r-1] == hyp_nospace[h-1] else 1)
-            insert = scores[h-1, r] + 1
-            delete = scores[h, r-1] + 1
-
-            if sub_or_cor < min(insert, delete):
-                last_h, last_r = h - 1, r - 1
-            else:
-                last_h, last_r = (h-1, r) if insert < delete else (h, r-1)
-
-            c_hyp = hyps[last_h] if last_h == h-1 else ''
-            c_ref = refs[last_r] if last_r == r-1 else ''
-            h, r = last_h, last_r
-
-            # do word-spacing normalization
-            if c_hyp.replace('_', '') == c_ref.replace('_', ''):
-                c_hyp = c_ref
-
-        ref_norm.append(c_ref)
-        hyp_norm.append(c_hyp)
-
-    # ref_norm[::-1], hyp_norm[::-1]
-    shyp = ''.join(map(str, hyp_norm[::-1])).replace('_', ' ')
-    return shyp
-
-
 
 if __name__ == "__main__":
     # CLI:
     hparams_file, run_opts, overrides = sb.parse_arguments(sys.argv[1:])
-    print(f'hparams_file : {hparams_file}')
-    print(f'run_opts : {run_opts}')
     with open(hparams_file) as fin:
         hparams = load_hyperpyyaml(fin, overrides)
 
@@ -580,8 +476,6 @@ if __name__ == "__main__":
         checkpointer=hparams["checkpointer"],
     )
 
-    print(f'asr_brain.device : {asr_brain.device}')
-
     # adding objects to trainer:
     # asr_brain.tokenizer = hparams["tokenizer"]
     asr_brain.tokenizer = tokenizer
@@ -597,9 +491,6 @@ if __name__ == "__main__":
     )
 
     # Testing
-    asr_brain.hparams.wer_file = os.path.join(
-        hparams["output_folder"], "wer_test.txt"
-    )
     asr_brain.evaluate(
         test_data,
         max_key="ACC",
